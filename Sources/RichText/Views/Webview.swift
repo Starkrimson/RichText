@@ -35,7 +35,8 @@ extension WebView: UIViewRepresentable {
         webview.scrollView.bounces = false
         webview.navigationDelegate = context.coordinator
         webview.scrollView.isScrollEnabled = false
-        
+        webview.scrollView.showsVerticalScrollIndicator = false
+
         DispatchQueue.main.async {
             webview.loadHTMLString(generateHTML(), baseURL: conf.baseURL)
         }
@@ -43,7 +44,11 @@ extension WebView: UIViewRepresentable {
         webview.isOpaque = false
         webview.backgroundColor = UIColor.clear
         webview.scrollView.backgroundColor = UIColor.clear
-        
+
+        // Configure User Content Controller to handle messages
+        let userContentController = webview.configuration.userContentController
+        userContentController.add(context.coordinator, name: "heightHandler")
+
         return webview
     }
 
@@ -75,6 +80,10 @@ extension WebView: NSViewRepresentable {
         }
         webview.setValue(false, forKey: "drawsBackground")
 
+        // Configure User Content Controller to handle messages
+        let userContentController = webview.configuration.userContentController
+        userContentController.add(context.coordinator, name: "heightHandler")
+
         return webview
     }
 
@@ -91,7 +100,7 @@ extension WebView: NSViewRepresentable {
 #endif
 
 extension WebView {
-    class Coordinator: NSObject, WKNavigationDelegate {
+    class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         var parent: WebView
         
         init(_ parent: WebView) {
@@ -111,7 +120,17 @@ extension WebView {
                 }
             })
         }
-        
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "heightHandler", let height = message.body as? CGFloat {
+                DispatchQueue.main.async {
+                    withAnimation(self.parent.conf.transition) {
+                        self.parent.dynamicHeight = height
+                    }
+                }
+            }
+        }
+
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             guard navigationAction.navigationType == WKNavigationType.linkActivated,
                   var url = navigationAction.request.url else {
@@ -181,6 +200,24 @@ extension WebView {
             </head>
             \(generateCSS())
             <div id="NuPlay_RichText">\(html)</div>
+            <script>
+            (function() {
+                var targetNode = document.getElementById('NuPlay_RichText');
+                var config = { attributes: true, childList: true, subtree: true };
+
+                var callback = function(mutationsList, observer) {
+                    var height = targetNode.offsetHeight;
+                    window.webkit.messageHandlers.heightHandler.postMessage(height);
+                };
+
+                var observer = new MutationObserver(callback);
+                observer.observe(targetNode, config);
+
+                // Initial height send
+                var height = targetNode.offsetHeight;
+                window.webkit.messageHandlers.heightHandler.postMessage(height);
+            })();
+            </script>
             </BODY>
             </HTML>
             """
