@@ -110,19 +110,17 @@ extension WebView {
         public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             webView.evaluateJavaScript("document.getElementById(\"NuPlay_RichText\").offsetHeight", completionHandler: { (height, _) in
                 DispatchQueue.main.async {
-                    if let height = height as? CGFloat {
+                    if let height = height as? CGFloat, height > self.parent.dynamicHeight {
                         withAnimation(self.parent.conf.transition) {
                             self.parent.dynamicHeight = height
                         }
-                    } else {
-                        self.parent.dynamicHeight = 0
                     }
                 }
             })
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-            if message.name == "heightHandler", let height = message.body as? CGFloat {
+            if message.name == "heightHandler", let height = message.body as? CGFloat, height > parent.dynamicHeight {
                 DispatchQueue.main.async {
                     withAnimation(self.parent.conf.transition) {
                         self.parent.dynamicHeight = height
